@@ -1,0 +1,145 @@
+# Step 4 compatibility-safe /evidence/sync logic.
+# Replace only the body of the existing sync_evidence() implementation with
+# the corresponding logic below; keep all other existing routes unchanged.
+
+ticker = payload.ticker.strip().upper()
+requested_at = datetime.now(timezone.utc)
+
+company = session.scalar(
+    select(Company).where(Company.ticker == ticker)
+)
+if company is None:
+    company = Company(
+        ticker=ticker,
+        name=ticker,
+    )
+    session.add(company)
+    session.flush()
+
+source = session.scalar(
+    select(Source).where(
+        Source.provider == "openbb",
+        Source.source_type == provider,
+        Source.name == "OpenBB Equity Profile",
+    )
+)
+
+if source is None:
+    source = Source(
+        provider="openbb",
+        source_type=provider,
+        name="OpenBB Equity Profile",
+        url=adapter.yahoo_url(ticker)
+        if provider == "yfinance"
+        else None,
+    )
+    session.add(source)
+    session.flush()
+
+snapshot = EvidenceSnapshot(
+    company_id=company.id,
+    source_id=source.id,
+    ticker=ticker,
+    operation="equity.profile",  # intentionally preserved
+    requested_at=requested_at,
+    status="pending",
+    request_params={
+        "symbol": ticker,
+        "provider": provider,
+        "snapshot_version": adapter.SNAPSHOT_VERSION,
+        "chart": False,
+        "sections": [
+            "profile",
+            "quote",
+            "metrics",
+            "consensus",
+            "income",
+            "cash",
+            "news",
+        ],
+    },
+)
+
+session.add(snapshot)
+session.flush()
+
+try:
+    normalized, meta = adapter.get_equity_research_snapshot(
+        ticker
+    )
+
+    raw = meta.get("raw", {})
+
+    raw_bytes = json.dumps(
+        raw,
+        sort_keys=True,
+        default=str,
+        ensure_ascii=False,
+    ).encode("utf-8")
+
+    retrieved_at = datetime.now(timezone.utc)
+
+    snapshot.status = "success"
+    snapshot.retrieved_at = retrieved_at
+    snapshot.raw_payload = raw
+    snapshot.normalized_payload = normalized
+
+    snapshot.record_count = sum(
+        meta.get("raw_sections", {}).values()
+    )
+
+    snapshot.content_hash = hashlib.sha256(
+        raw_bytes
+    ).hexdigest()
+
+    company_name = (
+        normalized
+        .get("company", {})
+        .get("name")
+    )
+
+    if company_name and company.name == ticker:
+        company.name = str(company_name)
+
+    session.commit()
+    session.refresh(snapshot)
+
+    return EvidenceSyncResponse(
+        snapshot_id=snapshot.id,
+        ticker=ticker,
+        provider=provider,
+        operation=snapshot.operation,
+        status=snapshot.status,
+        requested_at=snapshot.requested_at,
+        retrieved_at=snapshot.retrieved_at,
+        source_url=source.url,
+        data=normalized,
+        warnings=meta.get("warnings"),
+    )
+
+except OpenBBAdapterError as exc:
+
+    retrieved_at = datetime.now(timezone.utc)
+
+    snapshot.status = "failed"
+    snapshot.retrieved_at = retrieved_at
+    snapshot.error_code = exc.code
+    snapshot.error_message = exc.message[:500]
+
+    session.commit()
+
+    raise HTTPException(
+        status_code=502,
+        detail=EvidenceSyncResponse(
+            snapshot_id=snapshot.id,
+            ticker=ticker,
+            provider=provider,
+            operation=snapshot.operation,
+            status="failed",
+            requested_at=snapshot.requested_at,
+            retrieved_at=retrieved_at,
+            source_url=source.url,
+            error_code=exc.code,
+            error_message=exc.message[:500],
+        ).model_dump(mode="json"),
+    ) from exc

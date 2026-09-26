@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900">
+  <rect width="1400" height="900" fill="#f8fafc"/>
+  <style>
+    .title { font: 700 28px Arial, sans-serif; fill: #0f172a; }
+    .subtitle { font: 400 16px Arial, sans-serif; fill: #475569; }
+    .box { fill: white; stroke: #334155; stroke-width: 2; rx: 16; }
+    .box2 { fill: #eef2ff; stroke: #4338ca; stroke-width: 2; rx: 16; }
+    .box3 { fill: #ecfeff; stroke: #0e7490; stroke-width: 2; rx: 16; }
+    .box4 { fill: #fef3c7; stroke: #92400e; stroke-width: 2; rx: 16; }
+    .text { font: 600 17px Arial, sans-serif; fill: #0f172a; text-anchor: middle; }
+    .small { font: 400 14px Arial, sans-serif; fill: #475569; text-anchor: middle; }
+    .arrow { stroke: #64748b; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+    .label { font: 600 14px Arial, sans-serif; fill: #334155; text-anchor: middle; }
+  </style>
+
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L10,3 L0,6 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <text x="700" y="45" class="title" text-anchor="middle">Company Archetype → Dynamic Research Thread Framework</text>
+  <text x="700" y="72" class="subtitle" text-anchor="middle">Framework suggests what to research; the company and current evidence decide what actually persists.</text>
+
+  <rect x="500" y="105" width="400" height="90" class="box2"/>
+  <text x="700" y="140" class="text">Company Archetype</text>
+  <text x="700" y="167" class="small">Retail · Semiconductor · Platform · Mobility</text>
+
+  <path d="M700 195 L700 240" class="arrow"/>
+
+  <rect x="425" y="245" width="550" height="110" class="box"/>
+  <text x="700" y="282" class="text">Candidate Thread Library</text>
+  <text x="700" y="310" class="small">Reusable research themes · Optional · Not automatically activated</text>
+  <text x="700" y="335" class="small">Core economics · Growth engines · Moat · Competition · Capital allocation</text>
+
+  <path d="M560 355 L330 410" class="arrow"/>
+  <path d="M700 355 L700 410" class="arrow"/>
+  <path d="M840 355 L1070 410" class="arrow"/>
+
+  <rect x="140" y="415" width="380" height="110" class="box3"/>
+  <text x="330" y="455" class="text">Company-Specific Threads</text>
+  <text x="330" y="483" class="small">Selected from the framework</text>
+  <text x="330" y="506" class="small">+ company-specific themes</text>
+
+  <rect x="510" y="415" width="380" height="110" class="box4"/>
+  <text x="700" y="455" class="text">Flexible / Time-Sensitive</text>
+  <text x="700" y="483" class="small">Important now, but persistence is uncertain</text>
+  <text x="700" y="506" class="small">May become Active, Watching, or Dormant</text>
+
+  <rect x="880" y="415" width="380" height="110" class="box"/>
+  <text x="1070" y="455" class="text">Ephemeral Topics</text>
+  <text x="1070" y="483" class="small">Short-lived events or local issues</text>
+  <text x="1070" y="506" class="small">May live only in one Report</text>
+
+  <path d="M330 525 L330 605" class="arrow"/>
+  <path d="M700 525 L700 605" class="arrow"/>
+
+  <rect x="150" y="610" width="360" height="115" class="box2"/>
+  <text x="330" y="648" class="text">Thread Lifecycle</text>
+  <text x="330" y="677" class="small">Candidate → Active → Watching</text>
+  <text x="330" y="701" class="small">→ Dormant → Archived → Re-activate</text>
+
+  <rect x="520" y="610" width="360" height="115" class="box3"/>
+  <text x="700" y="648" class="text">Importance Changes</text>
+  <text x="700" y="677" class="small">New · Increased · Unchanged</text>
+  <text x="700" y="701" class="small">Decreased · Re-prioritized</text>
+
+  <rect x="890" y="610" width="360" height="115" class="box4"/>
+  <text x="1070" y="648" class="text">AI Thread Actions</text>
+  <text x="1070" y="677" class="small">Continue · Update · Create</text>
+  <text x="1070" y="701" class="small">Deprioritize · Close · Ephemeral</text>
+
+  <path d="M510 725 L610 795" class="arrow"/>
+  <path d="M700 725 L700 795" class="arrow"/>
+  <path d="M890 725 L790 795" class="arrow"/>
+
+  <rect x="470" y="800" width="460" height="70" class="box"/>
+  <text x="700" y="833" class="text">Research Timeline</text>
+  <text x="700" y="856" class="small">Thread ID + Thread Action + Thread Version connect time.</text>
+</svg>

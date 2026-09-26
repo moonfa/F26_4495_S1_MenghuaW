@@ -1,0 +1,4 @@
+Step 5A assumes the Step 4 adapter returns normalized_payload with:
+company, market, valuation, financial_health, analyst_consensus, recent_news, data_quality.
+
+Do not replace the Step 4 adapter with this patch. Step 5A is an AI/report-layer patch.

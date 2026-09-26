@@ -1,0 +1,930 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Investment Research Workbench</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #122033;
+      --muted: #6b7a8c;
+      --line: #dfe6ee;
+      --accent: #1f6feb;
+      --accent-soft: #eef5ff;
+      --good: #15803d;
+      --warn: #b45309;
+      --danger: #b91c1c;
+      --shadow: 0 8px 24px rgba(25, 39, 59, 0.06);
+      --code: #f7f9fc;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .shell {
+      max-width: 1220px;
+      margin: 0 auto;
+      padding: 30px 20px 64px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: flex-end;
+      margin-bottom: 22px;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 30px;
+      letter-spacing: -0.02em;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 18px;
+    }
+
+    h3 {
+      margin: 18px 0 8px;
+      font-size: 15px;
+    }
+
+    .subtitle { color: var(--muted); }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      background: var(--card);
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      margin-bottom: 14px;
+    }
+
+    input {
+      width: 150px;
+      padding: 11px 13px;
+      border-radius: 9px;
+      border: 1px solid var(--line);
+      font-size: 15px;
+      text-transform: uppercase;
+      outline: none;
+      background: white;
+    }
+
+    input:focus { border-color: #8db7f7; box-shadow: 0 0 0 3px #eaf2ff; }
+
+    button {
+      border: 0;
+      border-radius: 9px;
+      padding: 11px 15px;
+      font-weight: 650;
+      cursor: pointer;
+    }
+
+    button.primary { background: var(--accent); color: white; }
+    button.secondary { background: #eaf0f6; color: var(--text); }
+    button.ghost { background: transparent; border: 1px solid var(--line); color: var(--text); }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+
+    .status {
+      margin: 0 0 18px;
+      padding: 11px 13px;
+      min-height: 44px;
+      border-radius: 10px;
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+    }
+
+    .status.success { color: var(--good); background: #f2fbf5; border-color: #c8ead2; }
+    .status.error { color: var(--danger); background: #fff4f4; border-color: #efcaca; }
+    .status.busy { color: #315f9f; background: #f2f7ff; border-color: #cfe0fb; }
+
+    .section {
+      margin-top: 18px;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      margin: 0 0 10px;
+    }
+
+    .section-label {
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 20px;
+      min-width: 0;
+    }
+
+    .span-12 { grid-column: span 12; }
+    .span-8 { grid-column: span 8; }
+    .span-6 { grid-column: span 6; }
+    .span-4 { grid-column: span 4; }
+
+    .hero {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    .ticker {
+      font-size: 28px;
+      font-weight: 760;
+      letter-spacing: .01em;
+    }
+
+    .company {
+      font-size: 15px;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+
+    .price {
+      text-align: right;
+      font-size: 34px;
+      font-weight: 760;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+      margin-top: 3px;
+    }
+
+    .description {
+      margin: 14px 0 0;
+      line-height: 1.62;
+      color: #33445a;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0 18px;
+    }
+
+    .metric {
+      padding: 10px 0;
+      border-bottom: 1px solid #edf1f6;
+      min-width: 0;
+    }
+
+    .metric:nth-last-child(-n+2) { border-bottom: 0; }
+
+    .metric .label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
+      text-transform: none;
+    }
+
+    .metric .value {
+      font-weight: 650;
+      overflow-wrap: anywhere;
+    }
+
+    .pills { display: flex; flex-wrap: wrap; gap: 6px; }
+
+    .pill {
+      display: inline-block;
+      border: 1px solid var(--line);
+      background: #f8fafc;
+      color: #3a485a;
+      border-radius: 999px;
+      padding: 5px 9px;
+      font-size: 12px;
+    }
+
+    .muted { color: var(--muted); }
+
+    .warning {
+      color: var(--warn);
+      background: #fff8eb;
+      border: 1px solid #f2d39d;
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-top: 8px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .news {
+      display: grid;
+      gap: 10px;
+    }
+
+    .news-item {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .news-item a {
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 650;
+      line-height: 1.45;
+    }
+
+    .news-item a:hover { text-decoration: underline; }
+
+    .news-meta {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 5px;
+    }
+
+    .analysis-meta {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .analysis-meta-item {
+      background: #f8fafc;
+      border: 1px solid #ebeff4;
+      border-radius: 10px;
+      padding: 10px;
+      min-width: 0;
+    }
+
+    .analysis-meta-item .label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 4px;
+    }
+
+    .analysis-meta-item .value {
+      font-size: 13px;
+      font-weight: 650;
+      overflow-wrap: anywhere;
+    }
+
+    .takeaways {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .takeaways li {
+      margin: 9px 0;
+      line-height: 1.55;
+    }
+
+    .thread-action {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      margin-top: 9px;
+    }
+
+    .thread-title {
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+
+    .thread-meta {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 7px;
+    }
+
+    .report {
+      line-height: 1.72;
+      color: #1c2b3e;
+    }
+
+    .report h1, .report h2, .report h3, .report h4 {
+      margin-top: 22px;
+      margin-bottom: 8px;
+      line-height: 1.3;
+    }
+
+    .report h1 { font-size: 24px; }
+    .report h2 { font-size: 20px; }
+    .report h3 { font-size: 16px; }
+    .report p { margin: 10px 0; }
+    .report ul, .report ol { padding-left: 20px; }
+    .report li { margin: 6px 0; }
+    .report blockquote {
+      border-left: 3px solid #c8d7ea;
+      margin: 14px 0;
+      padding: 4px 14px;
+      color: #526277;
+      background: #f8fafc;
+    }
+
+    .report code {
+      background: #f1f4f8;
+      padding: 2px 5px;
+      border-radius: 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: .92em;
+    }
+
+    .report pre {
+      white-space: pre-wrap;
+      background: var(--code);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      overflow-x: auto;
+    }
+
+    details {
+      margin-top: 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: #fafcff;
+    }
+
+    details summary {
+      cursor: pointer;
+      font-weight: 650;
+      color: #44546a;
+    }
+
+    pre.json {
+      margin: 10px 0 0;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #44546a;
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 16px 0;
+    }
+
+    .error-box {
+      color: var(--danger);
+      background: #fff4f4;
+      border: 1px solid #efcaca;
+      border-radius: 10px;
+      padding: 12px;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 900px) {
+      .span-8, .span-6, .span-4 { grid-column: span 12; }
+      .analysis-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 620px) {
+      .header, .hero { flex-direction: column; align-items: flex-start; }
+      .price { text-align: left; }
+      .metrics { grid-template-columns: 1fr; }
+      .analysis-meta { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="header">
+      <div>
+        <h1>Investment Research Workbench</h1>
+        <div class="subtitle">Evidence Snapshot → Master Research Report → Key Takeaways → Thread Actions</div>
+      </div>
+    </header>
+
+    <section class="toolbar">
+      <input id="ticker" value="WMT" maxlength="16" aria-label="Ticker" />
+      <button id="syncBtn" class="primary">Sync Evidence</button>
+      <button id="analyzeBtn" class="secondary" disabled>Generate AI Review</button>
+      <button id="forceBtn" class="ghost" disabled>Force Full Review</button>
+    </section>
+
+    <div id="status" class="status">Ready.</div>
+
+    <section id="evidenceSection" class="section" hidden>
+      <div class="section-header">
+        <div class="section-label">Slice 1 — Evidence Layer</div>
+        <div id="evidenceStamp" class="muted"></div>
+      </div>
+      <div id="evidenceContent" class="grid"></div>
+    </section>
+
+    <section id="analysisSection" class="section" hidden>
+      <div class="section-header">
+        <div class="section-label">Slice 2 + Step 5A — AI Research Layer</div>
+        <div id="analysisStamp" class="muted"></div>
+      </div>
+      <div id="analysisContent" class="grid"></div>
+    </section>
+  </main>
+
+  <script>
+    let snapshotId = null;
+    let lastEvidence = null;
+    let lastAnalysis = null;
+
+    const $ = (id) => document.getElementById(id);
+    const tickerEl = $("ticker");
+    const syncBtn = $("syncBtn");
+    const analyzeBtn = $("analyzeBtn");
+    const forceBtn = $("forceBtn");
+    const statusEl = $("status");
+    const evidenceSection = $("evidenceSection");
+    const evidenceContent = $("evidenceContent");
+    const evidenceStamp = $("evidenceStamp");
+    const analysisSection = $("analysisSection");
+    const analysisContent = $("analysisContent");
+    const analysisStamp = $("analysisStamp");
+
+    function esc(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function setStatus(message, kind = "") {
+      statusEl.className = `status ${kind}`.trim();
+      statusEl.innerHTML = message;
+    }
+
+    function setBusy(isBusy) {
+      syncBtn.disabled = isBusy;
+      analyzeBtn.disabled = isBusy || !snapshotId;
+      forceBtn.disabled = isBusy || !snapshotId;
+    }
+
+    function normalizeTicker() {
+      const ticker = tickerEl.value.trim().toUpperCase();
+      tickerEl.value = ticker;
+      return ticker;
+    }
+
+    function fmtNumber(value, digits = 2) {
+      if (value === null || value === undefined || value === "") return "—";
+      const n = Number(value);
+      if (!Number.isFinite(n)) return esc(value);
+      return new Intl.NumberFormat("en-US", { maximumFractionDigits: digits }).format(n);
+    }
+
+    function fmtPct(value, digits = 1) {
+      if (value === null || value === undefined || value === "") return "—";
+      const n = Number(value);
+      if (!Number.isFinite(n)) return esc(value);
+      return `${(Math.abs(n) <= 1 ? n * 100 : n).toFixed(digits)}%`;
+    }
+
+    function fmtMoney(value) {
+      if (value === null || value === undefined || value === "") return "—";
+      const n = Number(value);
+      if (!Number.isFinite(n)) return esc(value);
+      const abs = Math.abs(n);
+      if (abs >= 1e12) return `$${(n / 1e12).toFixed(2)}T`;
+      if (abs >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
+      if (abs >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
+      return `$${n.toFixed(2)}`;
+    }
+
+    function labelize(key) {
+      return String(key)
+        .replaceAll("_", " ")
+        .replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    function formatValue(key, value) {
+      if (value === null || value === undefined || value === "") return "—";
+      if (typeof value === "boolean") return value ? "Yes" : "No";
+
+      const lower = String(key).toLowerCase();
+      const moneyKeys = new Set([
+        "current_price", "previous_close", "open", "day_high", "day_low",
+        "year_high", "year_low", "market_cap", "enterprise_value",
+        "eps_ttm", "eps_forward", "target_consensus"
+      ]);
+      const pctKeys = new Set([
+        "revenue_growth", "revenue_growth_yoy", "gross_margin", "operating_margin",
+        "net_margin", "return_on_equity", "return_on_invested_capital",
+        "free_cash_flow_margin", "earnings_yield", "free_cash_flow_yield",
+        "dividend_yield", "distance_from_52w_high_pct", "position_in_52w_range_pct",
+        "completeness", "growth", "margin_change"
+      ]);
+
+      if (moneyKeys.has(lower)) return fmtMoney(value);
+      if (pctKeys.has(lower)) return fmtPct(value);
+      if (typeof value === "number") return fmtNumber(value);
+      return esc(value);
+    }
+
+    function metricsHtml(obj, options = {}) {
+      if (!obj || Object.keys(obj).length === 0) {
+        return '<div class="empty">No data available.</div>';
+      }
+
+      const entries = Object.entries(obj).filter(([_, value]) => {
+        return value !== null && value !== undefined && value !== "" && !Array.isArray(value) && typeof value !== "object";
+      });
+
+      if (!entries.length) return '<div class="empty">No data available.</div>';
+
+      return `<div class="metrics">${entries.map(([key, value]) => `
+        <div class="metric">
+          <div class="label">${esc(labelize(key))}</div>
+          <div class="value">${formatValue(key, value)}</div>
+        </div>`).join("")}</div>`;
+    }
+
+    function renderEvidence(data, syncMeta = {}) {
+      lastEvidence = data;
+      const c = data.company || {};
+      const m = data.market || {};
+      const v = data.valuation || {};
+      const f = data.financial_health || {};
+      const a = data.analyst_consensus || {};
+      const q = data.data_quality || {};
+      const news = Array.isArray(data.recent_news) ? data.recent_news : [];
+
+      evidenceStamp.textContent = [
+        syncMeta.provider ? `Provider: ${syncMeta.provider}` : "",
+        syncMeta.retrieved_at ? `Retrieved: ${syncMeta.retrieved_at}` : "",
+        snapshotId ? `Snapshot #${snapshotId}` : ""
+      ].filter(Boolean).join(" · ");
+
+      evidenceContent.innerHTML = `
+        <article class="card span-12">
+          <div class="hero">
+            <div>
+              <div class="ticker">${esc(c.symbol || tickerEl.value)}</div>
+              <div class="company">${esc(c.name || "Unknown Company")}${c.sector ? ` · ${esc(c.sector)}` : ""}</div>
+              ${c.industry ? `<div class="meta">${esc(c.industry)}</div>` : ""}
+              ${c.stock_exchange || c.currency ? `<div class="meta">${esc(c.stock_exchange || "")} ${c.currency ? `· ${esc(c.currency)}` : ""}</div>` : ""}
+            </div>
+            <div>
+              <div class="price">${m.current_price == null ? "—" : formatValue("current_price", m.current_price)}</div>
+              <div class="meta">52W: ${formatValue("year_low", m.year_low)} – ${formatValue("year_high", m.year_high)}</div>
+            </div>
+          </div>
+          ${c.long_description || c.description ? `<div class="description">${esc(c.long_description || c.description)}</div>` : ""}
+        </article>
+
+        <article class="card span-4">
+          <h2>Market Snapshot</h2>
+          ${metricsHtml({
+            current_price: m.current_price,
+            previous_close: m.previous_close,
+            day_high: m.day_high,
+            day_low: m.day_low,
+            year_high: m.year_high,
+            year_low: m.year_low,
+            market_cap: m.market_cap ?? c.market_cap,
+            distance_from_52w_high_pct: m.distance_from_52w_high_pct,
+            position_in_52w_range_pct: m.position_in_52w_range_pct,
+            volume: m.volume,
+            average_volume: m.average_volume,
+            beta: m.beta,
+            currency: m.currency ?? c.currency
+          })}
+        </article>
+
+        <article class="card span-4">
+          <h2>Valuation Context</h2>
+          ${metricsHtml(v)}
+        </article>
+
+        <article class="card span-4">
+          <h2>Financial Health</h2>
+          ${metricsHtml(f)}
+        </article>
+
+        <article class="card span-6">
+          <h2>Analyst Consensus</h2>
+          ${metricsHtml(a)}
+        </article>
+
+        <article class="card span-6">
+          <h2>Data Quality</h2>
+          <div class="pills">
+            <span class="pill">Schema: ${esc(data.schema_version || "unknown")}</span>
+            ${q.completeness !== undefined ? `<span class="pill">Completeness: ${esc(q.completeness)}%</span>` : ""}
+            ${q.warnings_count !== undefined ? `<span class="pill">Warnings: ${esc(q.warnings_count)}</span>` : ""}
+          </div>
+          ${Array.isArray(q.sections_available) && q.sections_available.length ? `
+            <h3>Sections available</h3>
+            <div class="pills">${q.sections_available.map(x => `<span class="pill">${esc(x)}</span>`).join("")}</div>` : ""}
+          ${Array.isArray(q.sections_missing) && q.sections_missing.length ? `
+            <h3>Sections missing</h3>
+            <div class="pills">${q.sections_missing.map(x => `<span class="pill">${esc(x)}</span>`).join("")}</div>` : ""}
+          ${Array.isArray(q.warnings) && q.warnings.length ? q.warnings.map(w => `
+            <div class="warning"><strong>${esc(w.operation || "Provider warning")}</strong>: ${esc(w.message || "")}</div>`).join("") : '<div class="muted" style="margin-top:10px">No provider warnings.</div>'}
+        </article>
+
+        <article class="card span-12">
+          <h2>Recent News</h2>
+          <div class="news">
+            ${news.length ? news.map(n => `
+              <div class="news-item">
+                ${n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.title || "Untitled")}</a>` : `<div><strong>${esc(n.title || "Untitled")}</strong></div>`}
+                <div class="news-meta">${esc(n.source || "Unknown source")} ${n.date ? `· ${esc(n.date)}` : ""}</div>
+                ${n.excerpt ? `<div class="meta" style="margin-top:8px">${esc(n.excerpt)}</div>` : ""}
+              </div>`).join("") : '<div class="empty">No recent news returned.</div>'}
+          </div>
+        </article>
+      `;
+
+      evidenceSection.hidden = false;
+    }
+
+    function markdownToHtml(markdown) {
+      if (!markdown) return '<div class="empty">No report content.</div>';
+
+      const lines = String(markdown).replace(/\r\n?/g, "\n").split("\n");
+      let html = "";
+      let inUl = false;
+      let inOl = false;
+      let inCode = false;
+      let codeLines = [];
+
+      const inline = (text) => {
+        let s = esc(text);
+        s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+        s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        s = s.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+        s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+        s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+        return s;
+      };
+
+      const closeLists = () => {
+        if (inUl) { html += "</ul>"; inUl = false; }
+        if (inOl) { html += "</ol>"; inOl = false; }
+      };
+
+      for (const rawLine of lines) {
+        const line = rawLine.trimEnd();
+
+        if (line.startsWith("```") || line.startsWith("~~~")) {
+          if (!inCode) {
+            closeLists();
+            inCode = true;
+            codeLines = [];
+          } else {
+            html += `<pre>${esc(codeLines.join("\n"))}</pre>`;
+            inCode = false;
+            codeLines = [];
+          }
+          continue;
+        }
+
+        if (inCode) {
+          codeLines.push(line);
+          continue;
+        }
+
+        if (!line.trim()) {
+          closeLists();
+          continue;
+        }
+
+        const heading = line.match(/^(#{1,4})\s+(.+)$/);
+        if (heading) {
+          closeLists();
+          const level = heading[1].length;
+          html += `<h${level}>${inline(heading[2])}</h${level}>`;
+          continue;
+        }
+
+        if (/^>\s?/.test(line)) {
+          closeLists();
+          html += `<blockquote>${inline(line.replace(/^>\s?/, ""))}</blockquote>`;
+          continue;
+        }
+
+        const ul = line.match(/^[-*+]\s+(.+)$/);
+        if (ul) {
+          if (inOl) { html += "</ol>"; inOl = false; }
+          if (!inUl) { html += "<ul>"; inUl = true; }
+          html += `<li>${inline(ul[1])}</li>`;
+          continue;
+        }
+
+        const ol = line.match(/^\d+[.)]\s+(.+)$/);
+        if (ol) {
+          if (inUl) { html += "</ul>"; inUl = false; }
+          if (!inOl) { html += "<ol>"; inOl = true; }
+          html += `<li>${inline(ol[1])}</li>`;
+          continue;
+        }
+
+        closeLists();
+        html += `<p>${inline(line)}</p>`;
+      }
+
+      if (inCode) html += `<pre>${esc(codeLines.join("\n"))}</pre>`;
+      closeLists();
+      return html;
+    }
+
+    function renderAnalysis(payload) {
+      const result = payload.result || {};
+      lastAnalysis = result;
+
+      const reviewType = result.review_type || "unknown";
+      const materialChange = result.material_change;
+      const previousReport = result.previous_report_id;
+      const previousSnapshot = result.previous_snapshot_id;
+      const delta = result.evidence_delta || {};
+      const takeaways = Array.isArray(result.key_takeaways) ? result.key_takeaways : [];
+      const actions = Array.isArray(result.thread_actions) ? result.thread_actions : [];
+
+      analysisStamp.textContent = [
+        payload.provider ? `Provider: ${payload.provider}` : "",
+        payload.model ? `Model: ${payload.model}` : "",
+        payload.prompt_version ? `Prompt: ${payload.prompt_version}` : "",
+        payload.draft_id ? `Draft #${payload.draft_id}` : ""
+      ].filter(Boolean).join(" · ");
+
+      analysisContent.innerHTML = `
+        <article class="card span-12">
+          <div class="analysis-meta">
+            <div class="analysis-meta-item"><div class="label">Review Type</div><div class="value">${esc(reviewType)}</div></div>
+            <div class="analysis-meta-item"><div class="label">Material Change</div><div class="value">${esc(materialChange == null ? "—" : materialChange)}</div></div>
+            <div class="analysis-meta-item"><div class="label">Previous Snapshot</div><div class="value">${esc(previousSnapshot == null ? "None" : previousSnapshot)}</div></div>
+            <div class="analysis-meta-item"><div class="label">Previous Report</div><div class="value">${esc(previousReport == null ? "None" : previousReport)}</div></div>
+            <div class="analysis-meta-item"><div class="label">Current Snapshot</div><div class="value">${esc(snapshotId == null ? "—" : snapshotId)}</div></div>
+          </div>
+        </article>
+
+        <article class="card span-12">
+          <h2>What Changed</h2>
+          <div class="description" style="margin-top:0">${esc(result.what_changed || "No change summary was returned.")}</div>
+          <details>
+            <summary>Evidence Delta</summary>
+            <pre class="json">${esc(JSON.stringify(delta, null, 2))}</pre>
+          </details>
+        </article>
+
+        <article class="card span-6">
+          <h2>Key Takeaways</h2>
+          ${takeaways.length
+            ? `<ul class="takeaways">${takeaways.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`
+            : '<div class="empty">No key takeaways returned.</div>'}
+        </article>
+
+        <article class="card span-6">
+          <h2>Thread Actions</h2>
+          ${actions.length
+            ? actions.map(a => `
+              <div class="thread-action">
+                <div class="thread-title">${esc(a.title || "Untitled thread action")}</div>
+                <div class="thread-meta">${esc(a.action || "action")} · importance: ${esc(a.importance || "—")} · change: ${esc(a.importance_change || "—")}</div>
+                <div>${esc(a.change_summary || "No change summary.")}</div>
+              </div>`).join("")
+            : '<div class="empty">No thread actions returned.</div>'}
+        </article>
+
+        <article class="card span-12">
+          <h2>Master Research Report</h2>
+          <div class="report">${markdownToHtml(result.report_markdown || "")}</div>
+        </article>
+      `;
+
+      analysisSection.hidden = false;
+    }
+
+    function showApiError(data, fallback) {
+      const message = data && (data.error_message || data.detail || data.message);
+      return message ? String(message) : fallback;
+    }
+
+    async function syncEvidence({ keepAnalysis = false } = {}) {
+      const ticker = normalizeTicker();
+      if (!ticker) {
+        setStatus("Enter a ticker first.", "error");
+        return false;
+      }
+
+      setBusy(true);
+      setStatus(`Syncing Evidence Snapshot for <strong>${esc(ticker)}</strong>...`, "busy");
+
+      try {
+        const response = await fetch("/api/v1/evidence/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ticker })
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(showApiError(data, `Evidence sync failed (HTTP ${response.status}).`));
+        if (data.status && data.status !== "success") throw new Error(showApiError(data, "Evidence sync failed."));
+
+        snapshotId = data.snapshot_id;
+        const normalized = data.data || data.normalized_payload || {};
+        renderEvidence(normalized, data);
+
+        if (!keepAnalysis) {
+          analysisSection.hidden = true;
+          analysisContent.innerHTML = "";
+          lastAnalysis = null;
+        }
+
+        setStatus(`Evidence synced: <strong>${esc(ticker)}</strong> · snapshot ${esc(snapshotId)} · ${esc(data.provider || "provider")}`, "success");
+        return true;
+      } catch (error) {
+        setStatus(`<div class="error-box">${esc(error.message || String(error))}</div>`, "error");
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function analyze(forceRefresh = false) {
+      if (!snapshotId) {
+        const ok = await syncEvidence();
+        if (!ok) return;
+      }
+
+      setBusy(true);
+      setStatus(
+        forceRefresh
+          ? "Generating a full Master Research Report review..."
+          : "Generating Master Research Report...",
+        "busy"
+      );
+
+      try {
+        const response = await fetch(`/api/v1/analysis/evidence/${snapshotId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            analysis_type: "company_profile",
+            force_refresh: forceRefresh
+          })
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(showApiError(data, `Analysis failed (HTTP ${response.status}).`));
+        if (data.status !== "success") throw new Error(showApiError(data, "Analysis failed."));
+
+        renderAnalysis(data);
+
+        const x = data.result || {};
+        setStatus(
+          `<strong>Review generated</strong> · ${esc(x.review_type || "unknown")} · material change: ${esc(x.material_change == null ? "—" : x.material_change)}`,
+          "success"
+        );
+      } catch (error) {
+        setStatus(`<div class="error-box">${esc(error.message || String(error))}</div>`, "error");
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    syncBtn.addEventListener("click", () => syncEvidence());
+    analyzeBtn.addEventListener("click", () => analyze(false));
+    forceBtn.addEventListener("click", () => analyze(true));
+
+    tickerEl.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") syncEvidence();
+    });
+  </script>
+</body>
+</html>

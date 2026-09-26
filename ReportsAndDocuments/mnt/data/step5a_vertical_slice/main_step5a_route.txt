@@ -1,0 +1,5 @@
+# Add to main.py after the existing / route:
+
+@app.get("/step5a")
+def step5a() -> FileResponse:
+    return FileResponse(BASE_DIR / "static" / "step5a.html")

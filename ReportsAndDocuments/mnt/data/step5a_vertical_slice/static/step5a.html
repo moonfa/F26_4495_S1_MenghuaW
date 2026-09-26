@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Investment Research Workbench — Step 5A</title>
+<style>
+body{font-family:Arial,sans-serif;margin:0;background:#f8fafc;color:#0f172a}
+main{max-width:1100px;margin:0 auto;padding:28px}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}
+input,button{font-size:16px;padding:10px 12px;border-radius:8px;border:1px solid #cbd5e1}
+button{cursor:pointer;background:#0f172a;color:white;border:0}
+button.secondary{background:#475569}
+.card{background:white;border:1px solid #e2e8f0;border-radius:12px;padding:18px;margin:14px 0;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.meta div{background:#f1f5f9;padding:10px;border-radius:8px}
+label{display:block;font-size:12px;color:#64748b;margin-bottom:4px;text-transform:uppercase}
+#report{white-space:pre-wrap;line-height:1.65}
+ul{line-height:1.6}
+.small{color:#64748b;font-size:14px}
+.error{color:#b91c1c;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<main>
+<h1>Investment Research Workbench — Step 5A</h1>
+<p class="small">Vertical test: Slice 1 Evidence → Master Research Report → Key Takeaways → Thread Actions</p>
+<div class="row">
+  <input id="ticker" value="WMT" maxlength="16" />
+  <button onclick="syncEvidence()">1. Sync Evidence</button>
+  <button onclick="analyze(false)">2. Generate Review</button>
+  <button class="secondary" onclick="analyze(true)">Force Full Review</button>
+</div>
+<div id="status" class="card">Ready.</div>
+<div id="meta" class="card" style="display:none"></div>
+<div id="change" class="card" style="display:none"></div>
+<div id="takeaways" class="card" style="display:none"></div>
+<div id="threads" class="card" style="display:none"></div>
+<div id="reportCard" class="card" style="display:none"><h2>Master Research Report</h2><div id="report"></div></div>
+</main>
+<script>
+let snapshotId=null;
+const $=id=>document.getElementById(id);
+function esc(s){return String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')}
+async function syncEvidence(){
+  const ticker=$('ticker').value.trim().toUpperCase();
+  $('status').textContent='Syncing evidence...';
+  try{
+    const r=await fetch('/api/v1/evidence/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticker})});
+    const data=await r.json();
+    if(!r.ok) throw new Error(JSON.stringify(data,null,2));
+    snapshotId=data.snapshot_id;
+    $('status').innerHTML=`Evidence synced: <b>${esc(ticker)}</b> · snapshot ${snapshotId}`;
+  }catch(e){$('status').innerHTML=`<div class="error">${esc(e.message)}</div>`}
+}
+async function analyze(forceRefresh){
+  if(!snapshotId){await syncEvidence();}
+  if(!snapshotId)return;
+  $('status').textContent='Generating Master Research Report...';
+  try{
+    const r=await fetch(`/api/v1/analysis/evidence/${snapshotId}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({analysis_type:'company_profile',force_refresh:forceRefresh})});
+    const data=await r.json();
+    if(!r.ok) throw new Error(JSON.stringify(data,null,2));
+    if(data.status!=='success') throw new Error(data.error_message||'Analysis failed');
+    const x=data.result||{};
+    $('status').innerHTML=`<b>Review generated</b> · ${esc(x.review_type||'unknown')} · material change: ${esc(x.material_change)}`;
+    $('meta').style.display='block';
+    $('meta').innerHTML=`<div class="meta"><div><label>Provider</label>${esc(data.provider)}</div><div><label>Model</label>${esc(data.model)}</div><div><label>Review Type</label>${esc(x.review_type)}</div><div><label>Previous Report</label>${esc(x.previous_report_id??'None')}</div><div><label>Previous Snapshot</label>${esc(x.previous_snapshot_id??'None')}</div></div>`;
+    $('change').style.display='block';
+    $('change').innerHTML=`<h2>What Changed</h2><div>${esc(x.what_changed||'No change summary.')}</div><p class="small">Delta: ${esc(JSON.stringify(x.evidence_delta||{},null,2))}</p>`;
+    $('takeaways').style.display='block';
+    $('takeaways').innerHTML='<h2>Key Takeaways</h2><ul>'+((x.key_takeaways||[]).map(v=>`<li>${esc(v)}</li>`).join('')||'<li>None</li>')+'</ul>';
+    $('threads').style.display='block';
+    $('threads').innerHTML='<h2>Thread Actions</h2><ul>'+((x.thread_actions||[]).map(v=>`<li><b>${esc(v.action)}</b> — ${esc(v.title)} · ${esc(v.importance)} · ${esc(v.importance_change)}<br>${esc(v.change_summary)}</li>`).join('')||'<li>None</li>')+'</ul>';
+    $('reportCard').style.display='block';
+    $('report').textContent=x.report_markdown||'';
+  }catch(e){$('status').innerHTML=`<div class="error">${esc(e.message)}</div>`}
+}
+</script>
+</body>
+</html>
