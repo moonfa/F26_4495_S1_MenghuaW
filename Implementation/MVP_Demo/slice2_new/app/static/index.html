@@ -99,6 +99,7 @@
     button.secondary { background: #eaf0f6; color: var(--text); }
     button.ghost { background: transparent; border: 1px solid var(--line); color: var(--text); }
     button:disabled { opacity: .55; cursor: not-allowed; }
+    select { padding: 10px; border: 1px solid var(--line); border-radius: 9px; max-width: 100%; background: white; }
 
     .status {
       margin: 0 0 18px;
@@ -435,10 +436,33 @@
       <button id="syncBtn" class="primary">Sync Evidence</button>
       <button id="analyzeBtn" class="secondary" disabled>Generate AI Review</button>
       <button id="forceBtn" class="ghost" disabled>Force Full Review</button>
+      <button id="loadSavedBtn" class="secondary" type="button">Load Saved Research</button>
     </section>
 
     <div id="status" class="status">Ready.</div>
 
+    <section class="section" id="historyPanel">
+      <div class="section-header"><div class="section-label">Step 6 — Saved Research</div><span class="muted">Read-only; no OpenBB / Gemini call</span></div>
+      <div class="grid">
+        <article class="card span-6"><h2>Historical Master Research Reports</h2>
+          <div id="historyItems" class="news"><div class="empty">Load saved research to view history.</div></div></article>
+        <article class="card span-6"><h2>Active Research Threads</h2>
+          <div id="threadItems" class="news"><div class="empty">Approved threads will appear here.</div></div>
+          <div id="timelineItems" style="margin-top:12px"></div></article>
+        <article class="card span-12"><h2>Personal Research Journal</h2>
+          <p class="muted">Your own dated hypotheses and decisions are kept separate from AI-generated analysis.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+            <select id="noteType" aria-label="Note type"><option value="hypothesis">Hypothesis</option>
+            <option value="valuation_assumption">Valuation assumption</option><option value="planned_action">Planned action</option>
+            <option value="review_outcome">Review outcome</option><option value="general">General</option></select>
+            <select id="noteThread" aria-label="Related thread"><option value="">Company-wide note</option></select>
+          </div>
+          <textarea id="noteBody" rows="3" maxlength="20000" placeholder="Record your hypothesis, valuation assumptions, monitoring indicators, and conditions for review..." style="width:100%;padding:12px;border:1px solid var(--line);border-radius:9px;font:inherit;text-transform:none"></textarea>
+          <button id="saveNoteBtn" class="secondary" type="button" style="margin-top:10px">Save my note</button>
+          <div id="noteItems" class="news" style="margin-top:14px"></div>
+        </article>
+      </div>
+    </section>
     <section id="evidenceSection" class="section" hidden>
       <div class="section-header">
         <div class="section-label">Slice 1 — Evidence Layer</div>
@@ -460,6 +484,10 @@
     let snapshotId = null;
     let lastEvidence = null;
     let lastAnalysis = null;
+    let displayedTicker = null;
+    let renderedReportId = null;
+    let currentThreads = [];
+    let currentReportHistory = [];
 
     const $ = (id) => document.getElementById(id);
     const tickerEl = $("ticker");
@@ -490,6 +518,7 @@
 
     function setBusy(isBusy) {
       syncBtn.disabled = isBusy;
+      $("loadSavedBtn").disabled = isBusy;
       analyzeBtn.disabled = isBusy || !snapshotId;
       forceBtn.disabled = isBusy || !snapshotId;
     }
@@ -551,16 +580,16 @@
       "gross_margin", "operating_margin", "profit_margin", "net_margin",
       "return_on_equity", "return_on_assets", "return_on_invested_capital",
       "free_cash_flow_margin", "earnings_yield", "free_cash_flow_yield",
-      "dividend_yield", "target_upside", "target_upside_pct", "upside_potential",
+      "target_upside", "target_upside_pct", "upside_potential",
       "gross_profit_margin", "ebitda_margin", "operating_cash_flow_margin"
     ]);
     const ALREADY_PERCENT_FIELDS = new Set([
-      "distance_from_52w_high_pct", "position_in_52w_range_pct", "completeness"
+      "distance_from_52w_high_pct", "position_in_52w_range_pct", "completeness", "dividend_yield", "debt_to_equity"
     ]);
     const MULTIPLE_FIELDS = new Set([
       "pe_ttm", "forward_pe", "peg", "price_to_sales", "price_to_book",
       "price_to_cash", "price_to_free_cash_flow", "ev_to_sales", "ev_to_ebitda",
-      "ev_to_free_cash_flow", "debt_to_equity"
+      "ev_to_free_cash_flow"
     ]);
 
     function formatValue(key, value) {
@@ -609,6 +638,10 @@
         snapshotId ? `Snapshot #${snapshotId}` : ""
       ].filter(Boolean).join(" · ");
 
+      displayedTicker = String(c.symbol || tickerEl.value).toUpperCase();
+      const yahooUrl = /^https:\/\//.test(syncMeta.source_url || "")
+        ? syncMeta.source_url
+        : `https://finance.yahoo.com/quote/${encodeURIComponent(displayedTicker.replaceAll(".","-"))}/`;
       evidenceContent.innerHTML = `
         <article class="card span-12">
           <div class="hero">
@@ -616,6 +649,7 @@
               <div class="ticker">${esc(c.symbol || tickerEl.value)}</div>
               <div class="company">${esc(c.name || "Unknown Company")}${c.sector ? ` · ${esc(c.sector)}` : ""}</div>
               ${c.industry ? `<div class="meta">${esc(c.industry)}</div>` : ""}
+              <div class="meta"><a href="${esc(yahooUrl)}" target="_blank" rel="noopener noreferrer">Yahoo Finance ↗</a></div>
               ${c.stock_exchange || c.currency ? `<div class="meta">${esc(c.stock_exchange || "")} ${c.currency ? `· ${esc(c.currency)}` : ""}</div>` : ""}
             </div>
             <div>
@@ -783,6 +817,20 @@
       return html;
     }
 
+    function valuationImplicationHtml(valuation) {
+      if (!valuation || !Array.isArray(valuation.impacts) || !valuation.impacts.length) return '<div class="empty">Not assessed in this historical report. Existing valuation assumptions remain unchanged.</div>';
+      const arrow={up:"↑",down:"↓",unchanged:"→",uncertain:"?"};
+      const rows=valuation.impacts.map(i=>`<tr><td>${esc(i.target === "base_metric" ? "Base metric" : "Multiple")}</td><td>${esc(arrow[i.direction] || "?")} ${esc(i.direction)}</td><td>${esc(i.magnitude)}</td><td>${esc(i.confidence)}</td><td>${esc(i.reason || "")}</td></tr>`).join("");
+      return `<p>Action: <strong>${esc(valuation.action || "no_action")}</strong> · AI impact assessment only; your saved valuation inputs are not changed.</p><div style="overflow-x:auto"><table><thead><tr><th>Input</th><th>Direction</th><th>Magnitude</th><th>Confidence</th><th>Reason</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    }
+    function toggleThreadEditor(actionId) {
+      const card=analysisContent.querySelector(`.thread-action[data-action-id="${actionId}"]`);
+      if (!card) return;
+      const editor=card.querySelector(".thread-edit-form");
+      if (!editor) return;
+      editor.hidden=!editor.hidden;
+      if(!editor.hidden) editor.querySelector("input")?.focus();
+    }
     function renderAnalysis(payload) {
       const result = payload.result || {};
       lastAnalysis = result;
@@ -794,6 +842,7 @@
       const delta = result.evidence_delta || {};
       const takeaways = Array.isArray(result.key_takeaways) ? result.key_takeaways : [];
       const actions = Array.isArray(result.thread_actions) ? result.thread_actions : [];
+      renderedReportId = result.id || null;
 
       analysisStamp.textContent = [
         payload.provider ? `Provider: ${payload.provider}` : "",
@@ -809,7 +858,7 @@
             <div class="analysis-meta-item"><div class="label">Material Change</div><div class="value">${esc(materialChange == null ? "—" : materialChange)}</div></div>
             <div class="analysis-meta-item"><div class="label">Previous Snapshot</div><div class="value">${esc(previousSnapshot == null ? "None" : previousSnapshot)}</div></div>
             <div class="analysis-meta-item"><div class="label">Previous Report</div><div class="value">${esc(previousReport == null ? "None" : previousReport)}</div></div>
-            <div class="analysis-meta-item"><div class="label">Current Snapshot</div><div class="value">${esc(snapshotId == null ? "—" : snapshotId)}</div></div>
+            <div class="analysis-meta-item"><div class="label">Report Snapshot</div><div class="value">${esc(result.snapshot_id ?? snapshotId ?? "—")}</div></div>
           </div>
         </article>
 
@@ -817,7 +866,8 @@
           <h2>What Changed</h2>
           <div class="description" style="margin-top:0">${esc(result.what_changed || "No change summary was returned.")}</div>
           <details>
-            <summary>Evidence Delta</summary>
+            <summary>Evidence Delta · ${esc(delta.status || "not available")}</summary>
+            <div class="description">${delta.status === "unchanged" ? "No tracked evidence changes were detected in the comparison used for this report. This is not a live comparison against the currently displayed Evidence Snapshot." : "Changes recorded when this report was generated; expand the technical details below."}</div>
             <pre class="json">${esc(JSON.stringify(delta, null, 2))}</pre>
           </details>
         </article>
@@ -833,14 +883,38 @@
           <h2>Thread Actions</h2>
           ${actions.length
             ? actions.map(a => `
-              <div class="thread-action">
+              <div class="thread-action" data-action-id="${Number(a.id) || 0}">
                 <div class="thread-title">${esc(a.title || "Untitled thread action")}</div>
                 <div class="thread-meta">${esc(a.action || "action")} · importance: ${esc(a.importance || "—")} · change: ${esc(a.importance_change || "—")}</div>
                 <div>${esc(a.change_summary || "No change summary.")}</div>
+                ${a.id ? `<div class="thread-meta" style="margin-top:8px">Review: ${esc(a.review_status || "proposed")}</div>` : ""}
+                ${a.id && a.review_status === "proposed" ? `
+                  ${(a.action !== "create" && a.action !== "ephemeral" && !a.thread_id) ? `
+                    <select data-target-for="${Number(a.id)}" aria-label="Existing research thread">
+                      <option value="">Link to an existing thread...</option>
+                      ${currentThreads.filter(t => t.status !== "archived").map(t=>`<option value="${Number(t.id)}">${esc(t.title)}</option>`).join("")}
+                    </select>` : ""}
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+                    <button type="button" class="primary" data-review-id="${Number(a.id)}" data-decision="approve">Approve</button>
+                    <button type="button" class="secondary" data-review-id="${Number(a.id)}" data-decision="edit">Edit & Approve</button>
+                    <button type="button" class="ghost" data-review-id="${Number(a.id)}" data-decision="reject">Reject</button>
+                  </div>
+                  <div class="thread-edit-form" hidden style="border:1px solid #9aa7b3;border-radius:8px;padding:12px;margin-top:10px">
+                    <label>Approved thread title<input data-edit-title="${Number(a.id)}" maxlength="240" value="${esc(a.title || "")}" style="display:block;width:100%;margin:6px 0 12px"></label>
+                    <label>Approved summary<textarea data-edit-summary="${Number(a.id)}" maxlength="900" rows="3" style="display:block;width:100%;margin:6px 0 12px">${esc(a.change_summary || "")}</textarea></label>
+                    <label>Importance<select data-edit-importance="${Number(a.id)}" style="display:block;margin:6px 0 12px">${["high","medium","low"].map(v=>`<option value="${v}" ${a.importance===v?"selected":""}>${v}</option>`).join("")}</select></label>
+                    <label>Reviewer note (optional)<textarea data-edit-note="${Number(a.id)}" rows="2" style="display:block;width:100%;margin:6px 0 12px"></textarea></label>
+                    <button type="button" class="primary" data-review-id="${Number(a.id)}" data-decision="save-edit">Save & Approve</button>
+                    <button type="button" class="ghost" data-review-id="${Number(a.id)}" data-decision="cancel-edit">Cancel</button>
+                  </div>` : ""}
               </div>`).join("")
             : '<div class="empty">No thread actions returned.</div>'}
         </article>
 
+        <article class="card span-12">
+          <h2>Valuation implication</h2>
+          ${valuationImplicationHtml(result.valuation_implications)}
+        </article>
         <article class="card span-12">
           <h2>Master Research Report</h2>
           <div class="report">${markdownToHtml(result.report_markdown || "")}</div>
@@ -876,17 +950,22 @@
         if (!response.ok) throw new Error(showApiError(data, `Evidence sync failed (HTTP ${response.status}).`));
         if (data.status && data.status !== "success") throw new Error(showApiError(data, "Evidence sync failed."));
 
+        const priorTicker = displayedTicker;
         snapshotId = data.snapshot_id;
         const normalized = data.data || data.normalized_payload || {};
         renderEvidence(normalized, data);
 
-        if (!keepAnalysis) {
+        // Only clear a previous report when switching to ANOTHER company.
+        // A newer snapshot for the same ticker keeps the old report visible
+        // until a new report has actually succeeded.
+        if (!keepAnalysis && lastAnalysis && priorTicker !== ticker) {
           analysisSection.hidden = true;
           analysisContent.innerHTML = "";
           lastAnalysis = null;
         }
 
         setStatus(`Evidence synced: <strong>${esc(ticker)}</strong> · snapshot ${esc(snapshotId)} · ${esc(data.provider || "provider")}`, "success");
+        await loadResearchPanels(ticker, false);
         return true;
       } catch (error) {
         setStatus(`<div class="error-box">${esc(error.message || String(error))}</div>`, "error");
@@ -924,11 +1003,15 @@
         if (!response.ok) throw new Error(showApiError(data, `Analysis failed (HTTP ${response.status}).`));
         if (data.status !== "success") throw new Error(showApiError(data, "Analysis failed."));
 
-        renderAnalysis(data);
+        await loadResearchPanels(normalizeTicker(), false);
+        // A report reused from an identical Snapshot keeps its ORIGINAL ID.
+        const archived = await fetch(`/api/v1/reports/by-draft/${data.draft_id}`);
+        const detail = archived.ok ? await archived.json() : null;
+        renderAnalysis(detail ? {...data, result:detail} : data);
 
         const x = data.result || {};
         setStatus(
-          `<strong>Review generated</strong> · ${esc(x.review_type || "unknown")} · material change: ${esc(x.material_change == null ? "—" : x.material_change)}`,
+          `<strong>${data.snapshot_id !== snapshotId ? "Reused saved review" : "Review available"}</strong> · ${esc(x.review_type || "unknown")} · material change: ${esc(x.material_change == null ? "—" : x.material_change)}${data.snapshot_id !== snapshotId ? ` · based on Snapshot #${esc(data.snapshot_id)}` : ""}`,
           "success"
         );
       } catch (error) {
@@ -937,6 +1020,137 @@
         setBusy(false);
       }
     }
+
+
+    async function getJson(url, options={}) {
+      const res=await fetch(url,options);
+      const data=await res.json();
+      if(!res.ok) throw new Error(showApiError(data,`HTTP ${res.status}`));
+      return data;
+    }
+    function reportButtonLabel(row) {
+      const when = row.created_at ? new Date(row.created_at).toLocaleString(undefined,{dateStyle:"medium",timeStyle:"short"}) : "Unknown date";
+      const type = row.review_type === "initial" ? "Baseline research" : row.review_type === "low_change" ? "Low-change follow-up" : "Full research review";
+      const summary = row.summary || (row.what_changed || row.key_takeaways?.[0] || "No summary recorded.").replace(/\s+/g," ").slice(0,160);
+      return `${when} · ${type}\n${summary}\nReport #${row.id} · Evidence #${row.snapshot_id}`;
+    }
+    async function showSavedReport(reportId) {
+      const report=await getJson(`/api/v1/reports/${reportId}`);
+      renderAnalysis({result:report,provider:report.provider,model:report.model,prompt_version:report.prompt_version});
+      analysisSection.scrollIntoView({behavior:"smooth"});
+    }
+    async function loadResearchPanels(ticker, showErrors=true) {
+      if(!ticker) return;
+      try {
+        const [reports,threads,notes]=await Promise.all([
+          getJson(`/api/v1/companies/${encodeURIComponent(ticker)}/reports?limit=100`),
+          getJson(`/api/v1/companies/${encodeURIComponent(ticker)}/threads`),
+          getJson(`/api/v1/companies/${encodeURIComponent(ticker)}/notes`)
+        ]);
+        currentReportHistory=reports;
+        currentThreads=threads;
+        const history=$("historyItems"); history.replaceChildren();
+        if(!reports.length) history.innerHTML='<div class="empty">No saved reports yet.</div>';
+        reports.forEach(row=>{
+          const btn=document.createElement("button");btn.type="button";btn.className="ghost";
+          btn.style.cssText="display:block;text-align:left;width:100%";
+          btn.textContent=reportButtonLabel(row);btn.style.whiteSpace="pre-line";
+          btn.addEventListener("click",async()=>{try{await showSavedReport(row.id);}catch(e){setStatus(esc(e.message),"error");}});
+          history.append(btn);
+        });
+        const threadBox=$("threadItems");threadBox.replaceChildren();
+        if(!threads.length) threadBox.innerHTML='<div class="empty">No approved research threads yet. Approve a proposed Create action in a saved report.</div>';
+        threads.forEach(thread=>{
+          const btn=document.createElement("button");btn.type="button";btn.className="ghost";
+          btn.style.cssText="display:block;text-align:left;width:100%";
+          btn.textContent=`${thread.title} · ${thread.status} · ${thread.importance}`;
+          btn.addEventListener("click",async()=>{
+            try {
+              const timeline=await getJson(`/api/v1/threads/${thread.id}/timeline`);
+              const el=$("timelineItems");el.replaceChildren();
+              const h=document.createElement("h3");h.textContent=`${timeline.title} · History`;el.append(h);
+              timeline.versions.forEach(v=>{
+                const box=document.createElement("div");box.className="news-item";
+                box.textContent=`${new Date(v.created_at).toLocaleString()} · Report #${v.report_id} · ${v.importance || ""} — ${v.state_summary}`;
+                el.append(box);
+              });
+            } catch(e) {setStatus(esc(e.message),"error");}
+          });
+          threadBox.append(btn);
+        });
+        const select=$("noteThread");select.replaceChildren();
+        const opt=document.createElement("option");opt.value="";opt.textContent="Company-wide note";select.append(opt);
+        threads.forEach(t=>{const opt=document.createElement("option");opt.value=String(t.id);opt.textContent=t.title;select.append(opt);});
+        const notesBox=$("noteItems");notesBox.replaceChildren();
+        if(!notes.length) notesBox.innerHTML='<div class="empty">No personal notes yet.</div>';
+        notes.forEach(n=>{
+          const article=document.createElement("article");article.className="news-item";
+          const head=document.createElement("div");head.className="news-meta";
+          head.textContent=`${n.note_type} · ${new Date(n.created_at).toLocaleString()}`;
+          const body=document.createElement("div");body.textContent=n.body;
+          article.append(head,body);notesBox.append(article);
+        });
+      }catch(e){if(showErrors)setStatus(esc(e.message),"error");}
+    }
+    async function loadSavedWorkspace({silent=false}={}) {
+      const ticker=normalizeTicker();if(!ticker)return;
+      try {
+        const list=await getJson(`/api/v1/evidence/${encodeURIComponent(ticker)}`);
+        const latest=list.find(x=>x.status==="success" && x.data);
+        const priorTicker=displayedTicker;
+        if(latest) {
+          snapshotId=latest.snapshot_id;
+          renderEvidence(latest.data,{provider:latest.provider,retrieved_at:latest.retrieved_at});
+          if(priorTicker!==ticker){analysisSection.hidden=true;lastAnalysis=null;}
+        }
+        setBusy(false);
+        await loadResearchPanels(ticker,!silent);
+        if(!silent)setStatus(latest ? `Loaded saved evidence for ${esc(ticker)} · Snapshot #${latest.snapshot_id}. No external API called.` : `No saved evidence yet for ${esc(ticker)}.`,"success");
+      }catch(e){if(!silent)setStatus(esc(e.message),"error");}
+    }
+    analysisContent.addEventListener("click",async event=>{
+      const btn=event.target.closest("button[data-review-id]");if(!btn)return;
+      const actionId=Number(btn.dataset.reviewId);
+      let decision=btn.dataset.decision;
+      let payload={decision:decision==="reject"?"reject":"approve"};
+      const select=analysisContent.querySelector(`select[data-target-for="${actionId}"]`);
+      if(select && select.value) payload.target_thread_id=Number(select.value);
+      if(decision==="edit" || decision==="cancel-edit") {toggleThreadEditor(actionId);return;}
+      if(decision==="save-edit") {
+        const title=analysisContent.querySelector(`[data-edit-title="${actionId}"]`)?.value.trim();
+        const summary=analysisContent.querySelector(`[data-edit-summary="${actionId}"]`)?.value.trim();
+        const importance=analysisContent.querySelector(`[data-edit-importance="${actionId}"]`)?.value;
+        const note=analysisContent.querySelector(`[data-edit-note="${actionId}"]`)?.value.trim();
+        if(!title || !summary){setStatus("Title and summary are required.","error");return;}
+        payload.edited_title=title;payload.edited_summary=summary;payload.edited_importance=importance;
+        if(note)payload.reviewer_note=note;
+      }
+      if(decision==="approve" && !window.confirm("Approve this AI proposal?"))return;
+      try {
+        await getJson(`/api/v1/thread-actions/${actionId}/review`,{
+          method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)
+        });
+        await loadResearchPanels(normalizeTicker(),false);
+        if(renderedReportId) await showSavedReport(renderedReportId);
+        setStatus("Thread action reviewed and saved.","success");
+      }catch(e){setStatus(esc(e.message),"error");}
+    });
+    $("saveNoteBtn").addEventListener("click",async()=>{
+      const ticker=normalizeTicker();const body=$("noteBody").value.trim();
+      if(!body){setStatus("Write a note first.","error");return;}
+      const threadId=$("noteThread").value;
+      try {
+        await getJson(`/api/v1/companies/${encodeURIComponent(ticker)}/notes`,{
+          method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({body,note_type:$("noteType").value,thread_id:threadId?Number(threadId):null})
+        });
+        $("noteBody").value="";await loadResearchPanels(ticker,false);
+        setStatus("Personal note saved.","success");
+      } catch(e) {setStatus(esc(e.message),"error");}
+    });
+    $("loadSavedBtn").addEventListener("click",()=>loadSavedWorkspace());
+    // The default ticker opens cached local research, never a provider or AI request.
+    loadSavedWorkspace({silent:true});
 
     syncBtn.addEventListener("click", () => syncEvidence());
     analyzeBtn.addEventListener("click", () => analyze(false));

@@ -15,6 +15,8 @@ from .ai.report_context import build_review_context
 from .adapters.openbb_adapter import OpenBBAdapter, OpenBBAdapterError
 from .database import Base, engine, get_session
 from .models import AnalysisDraft, Company, EvidenceSnapshot, Source
+from .step6.models import ResearchReport
+from .step6.service import canonical_hash, import_successful_drafts, active_thread_context
 from .schemas import (
     AnalysisDraftResponse,
     AnalysisRequest,
@@ -23,7 +25,11 @@ from .schemas import (
     SyncRequest,
 )
 
-Base.metadata.create_all(engine)
+# Keep legacy tables auto-created for Slice 1/2, but Step6 tables must be
+# created by the explicit backed-up migration, not implicitly on app import.
+Base.metadata.create_all(engine, tables=[
+    Company.__table__, Source.__table__, EvidenceSnapshot.__table__, AnalysisDraft.__table__
+])
 
 
 def build_router(provider: str) -> APIRouter:
@@ -181,12 +187,35 @@ def build_router(provider: str) -> APIRouter:
                 detail="Step 5A supports company_profile / Master Research Report only.",
             )
 
+        # Early reusable-report lookup MUST happen before previous-report context is
+        # assembled; otherwise an identical second click changes previous_report_id
+        # and incorrectly causes a new Gemini call.
+        import_successful_drafts(session, company_id=snapshot.company_id)
+        thread_context = active_thread_context(session, snapshot.company_id)
+        thread_state_hash = canonical_hash(thread_context)
+        if not payload.force_refresh:
+            old_report = session.scalar(
+                select(ResearchReport).where(
+                    ResearchReport.company_id == snapshot.company_id,
+                    ResearchReport.evidence_content_hash == canonical_hash(snapshot.normalized_payload),
+                    ResearchReport.thread_state_hash == thread_state_hash,
+                    ResearchReport.prompt_version == PROMPT_VERSION,
+                    ResearchReport.provider == ("gemini" if os.getenv("AI_PROVIDER", "mock").strip().lower() in ("google", "gemini") else os.getenv("AI_PROVIDER", "mock").strip().lower()),
+                    ResearchReport.model == ("mock-model" if os.getenv("AI_PROVIDER", "mock").strip().lower() == "mock" else os.getenv("AI_MODEL", "gemini-3.8-flash")),
+                    ResearchReport.status == "success",
+                ).order_by(ResearchReport.created_at.desc(), ResearchReport.id.desc())
+            )
+            if old_report:
+                old_draft=session.get(AnalysisDraft,old_report.source_analysis_draft_id)
+                if old_draft:
+                    return _analysis_response(old_draft)
+
         previous_snapshot = session.scalar(
             select(EvidenceSnapshot)
             .where(
                 EvidenceSnapshot.company_id == snapshot.company_id,
                 EvidenceSnapshot.status == "success",
-                EvidenceSnapshot.id != snapshot_id,
+                EvidenceSnapshot.id < snapshot_id,
             )
             .order_by(EvidenceSnapshot.created_at.desc())
         )
@@ -198,25 +227,34 @@ def build_router(provider: str) -> APIRouter:
                 EvidenceSnapshot.company_id == snapshot.company_id,
                 AnalysisDraft.analysis_type == "company_profile",
                 AnalysisDraft.status == "success",
-                AnalysisDraft.snapshot_id != snapshot_id,
+                AnalysisDraft.snapshot_id <= snapshot_id,
             )
-            .order_by(AnalysisDraft.created_at.desc())
+            .order_by(AnalysisDraft.created_at.desc(), AnalysisDraft.id.desc())
         )
 
+        previous_report_snapshot = session.get(EvidenceSnapshot, previous_report.snapshot_id) if previous_report else None
+        reference_snapshot = previous_report_snapshot or previous_snapshot
+
+        previous_archived = session.scalar(select(ResearchReport).where(
+            ResearchReport.source_analysis_draft_id == previous_report.id
+        )) if previous_report else None
         previous_result = previous_report.output_payload if previous_report else {}
         previous_key_takeaways = list(previous_result.get("key_takeaways") or []) if isinstance(previous_result, dict) else []
 
         review_context = build_review_context(
             current_snapshot_id=snapshot.id,
             current_evidence=snapshot.normalized_payload,
-            previous_snapshot_id=previous_snapshot.id if previous_snapshot else None,
-            previous_report_id=previous_report.id if previous_report else None,
-            previous_evidence=previous_snapshot.normalized_payload if previous_snapshot else None,
+            previous_snapshot_id=reference_snapshot.id if reference_snapshot else None,
+            previous_report_id=previous_archived.id if previous_archived else None,
+            previous_evidence=reference_snapshot.normalized_payload if reference_snapshot else None,
             previous_key_takeaways=previous_key_takeaways,
         )
 
+        # A force request asks for a NEW full narrative even when the evidence barely moved.
+        actual_review_type = ("full_follow_up" if payload.force_refresh and previous_report
+                              else review_context.review_type)
         review_context_dict = {
-            "review_type": review_context.review_type,
+            "review_type": actual_review_type,
             "material_change": review_context.material_change,
             "current_snapshot_id": review_context.current_snapshot_id,
             "previous_snapshot_id": review_context.previous_snapshot_id,
@@ -224,27 +262,15 @@ def build_router(provider: str) -> APIRouter:
             "evidence_delta": review_context.evidence_delta,
         }
 
-        input_hash = AIAnalyzer.input_hash(
+        input_hash_base = AIAnalyzer.input_hash(
             evidence=snapshot.normalized_payload,
             review_context=review_context_dict,
             previous_key_takeaways=previous_key_takeaways,
             prompt_version=PROMPT_VERSION,
         )
 
-        # Exact duplicate: same evidence + same model/prompt context.
-        if not payload.force_refresh:
-            existing = session.scalar(
-                select(AnalysisDraft)
-                .where(
-                    AnalysisDraft.snapshot_id == snapshot_id,
-                    AnalysisDraft.analysis_type == "company_profile",
-                    AnalysisDraft.input_hash == input_hash,
-                    AnalysisDraft.status == "success",
-                )
-                .order_by(AnalysisDraft.created_at.desc())
-            )
-            if existing is not None:
-                return _analysis_response(existing)
+        # Any approved Thread updates change the prompt, and therefore the cache key.
+        input_hash = hashlib.sha256((input_hash_base + thread_state_hash).encode()).hexdigest()
 
         provider_name = os.getenv("AI_PROVIDER", "mock").strip().lower()
         model_name = os.getenv("AI_MODEL", "not-configured")
@@ -289,16 +315,18 @@ def build_router(provider: str) -> APIRouter:
                 evidence=snapshot.normalized_payload,
                 review_context=review_context_dict,
                 previous_key_takeaways=previous_key_takeaways,
-                thread_context=[],
+                thread_context=thread_context,
             )
 
             persisted_result = {
                 "report_type": "master_research_report",
-                "review_type": review_context.review_type,
+                "review_type": actual_review_type,
                 "material_change": review_context.material_change,
                 "previous_snapshot_id": review_context.previous_snapshot_id,
                 "previous_report_id": review_context.previous_report_id,
+                "previous_report_ref_type": "research_report",
                 "evidence_delta": review_context.evidence_delta,
+                "thread_state_hash": thread_state_hash,
                 **result,
             }
 
@@ -306,6 +334,15 @@ def build_router(provider: str) -> APIRouter:
             draft.output_payload = persisted_result
             session.commit()
             session.refresh(draft)
+            # Archive the successful report and the PROPOSED Thread Actions.
+            # A recoverable archive error must not turn a successful AI response
+            # into a false "AI failed" record; rerun migration to reconcile.
+            try:
+                import_successful_drafts(session, company_id=snapshot.company_id)
+            except Exception:
+                session.rollback()
+                import logging
+                logging.exception("Step6 archive failed; recover using python -m app.step6.migrate")
             return _analysis_response(draft)
 
         except AIProviderError as exc:

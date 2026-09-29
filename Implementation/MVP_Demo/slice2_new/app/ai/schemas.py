@@ -23,6 +23,19 @@ class ThreadAction(BaseModel):
     change_summary: str = Field(min_length=1, max_length=900)
 
 
+class ValuationImpact(BaseModel):
+    target: Literal["base_metric", "multiple"]
+    direction: Literal["up", "down", "unchanged", "uncertain"]
+    magnitude: Literal["low", "medium", "high"]
+    confidence: Literal["low", "medium", "high"]
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class ValuationImplication(BaseModel):
+    impacts: list[ValuationImpact] = Field(default_factory=list, max_length=2)
+    action: Literal["no_action", "review_recommended", "user_updated"] = "no_action"
+
+
 class MasterResearchReport(BaseModel):
     """MVP AI output: one deep report plus minimal longitudinal metadata."""
 
@@ -30,6 +43,7 @@ class MasterResearchReport(BaseModel):
     key_takeaways: list[str] = Field(default_factory=list, max_length=6)
     what_changed: str = Field(default="No previous review was available.", max_length=5000)
     thread_actions: list[ThreadAction] = Field(default_factory=list, max_length=8)
+    valuation_implications: ValuationImplication | None = None
 
 
 class EventImpact(BaseModel):
