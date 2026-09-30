@@ -6,3 +6,4 @@
 .env
 __pycache__/
 local_backups/
+slice2_new_before_*/
