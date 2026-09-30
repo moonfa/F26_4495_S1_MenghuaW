@@ -18,7 +18,7 @@ def report_view(r):
         "provider":r.provider,"model":r.model,"prompt_version":r.prompt_version,
         "report_markdown":r.report_markdown,"key_takeaways":r.key_takeaways,
         "what_changed":r.what_changed,"evidence_delta":r.evidence_delta,
-        "valuation_implications":r.valuation_implications}
+        "valuation_implications":r.valuation_implications,"language":getattr(r,"language",None) or "en"}
 
 def company_for(session,ticker):
     company=session.scalar(select(Company).where(Company.ticker==ticker.strip().upper()))
@@ -36,7 +36,7 @@ def history(ticker:str, limit:int=20, session:Session=Depends(get_session)):
              "created_at":r.created_at,"review_type":r.review_type,
              "key_takeaways":r.key_takeaways,"what_changed":r.what_changed,
              "summary":(r.what_changed or (r.key_takeaways or [""])[0])[:220],
-             "valuation_implications":r.valuation_implications} for r in rows]
+             "valuation_implications":r.valuation_implications,"language":getattr(r,"language",None) or "en"} for r in rows]
 
 @router.get("/reports/{report_id}")
 def report_detail(report_id:int,session:Session=Depends(get_session)):

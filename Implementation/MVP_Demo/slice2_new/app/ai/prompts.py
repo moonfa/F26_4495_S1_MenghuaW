@@ -35,7 +35,7 @@ CONTINUITY RULES
 """.strip()
 
 COMPANY_INSTRUCTIONS = """
-Write one coherent Master Research Report in English.
+Write one coherent Master Research Report in the requested report language.
 
 Use these sections or close natural equivalents:
 
@@ -92,8 +92,11 @@ def build_company_prompt(
     review_context: dict,
     previous_key_takeaways: list[str],
     thread_context: list[dict] | None = None,
+    report_language: str = "en",
 ) -> str:
+    language_instruction = "Write all natural-language report text in Simplified Chinese. Keep ticker symbols, standard financial abbreviations (EPS, P/E, P/S, P/B, FCF) and structured enum values in English." if report_language == "zh-CN" else "Write all natural-language report text in English."
     context = {
+        "report_language": report_language,
         "analysis_mode": review_context.get("review_type"),
         "current_evidence": evidence,
         "evidence_delta": review_context.get("evidence_delta", {}),
@@ -102,7 +105,7 @@ def build_company_prompt(
         "previous_report_is_available": bool(review_context.get("previous_report_id")),
     }
     return (
-        f"{COMPANY_INSTRUCTIONS}\n\n"
+        f"{COMPANY_INSTRUCTIONS}\n\nREPORT LANGUAGE:\n{language_instruction}\n\n"
         "ANALYSIS_CONTEXT:\n"
         f"{json.dumps(context, ensure_ascii=False, indent=2, default=str)}"
     )

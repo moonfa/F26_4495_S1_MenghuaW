@@ -270,7 +270,7 @@ def build_router(provider: str) -> APIRouter:
         )
 
         # Any approved Thread updates change the prompt, and therefore the cache key.
-        input_hash = hashlib.sha256((input_hash_base + thread_state_hash).encode()).hexdigest()
+        input_hash = hashlib.sha256((input_hash_base + thread_state_hash + getattr(payload, "report_language", "en")).encode()).hexdigest()
 
         provider_name = os.getenv("AI_PROVIDER", "mock").strip().lower()
         model_name = os.getenv("AI_MODEL", "not-configured")
@@ -316,6 +316,7 @@ def build_router(provider: str) -> APIRouter:
                 review_context=review_context_dict,
                 previous_key_takeaways=previous_key_takeaways,
                 thread_context=thread_context,
+                report_language=getattr(payload, "report_language", "en"),
             )
 
             persisted_result = {
@@ -327,6 +328,7 @@ def build_router(provider: str) -> APIRouter:
                 "previous_report_ref_type": "research_report",
                 "evidence_delta": review_context.evidence_delta,
                 "thread_state_hash": thread_state_hash,
+                "language": getattr(payload, "report_language", "en"),
                 **result,
             }
 

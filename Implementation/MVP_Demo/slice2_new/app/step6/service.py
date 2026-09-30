@@ -59,6 +59,7 @@ def import_successful_drafts(session, company_id=None):
             what_changed=result.get("what_changed"),
             evidence_delta=result.get("evidence_delta"),
             valuation_implications=result.get("valuation_implications"),
+            language=result.get("language") or "en",
         )
         session.add(report)
         session.flush()

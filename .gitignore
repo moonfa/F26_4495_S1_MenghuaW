@@ -1,2 +1,8 @@
 .env
 .env
+.DS_Store
+*.db
+*.bak
+.env
+__pycache__/
+local_backups/

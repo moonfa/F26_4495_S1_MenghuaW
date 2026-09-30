@@ -262,6 +262,7 @@ class SyncRequest(BaseModel):
 class AnalysisRequest(BaseModel):
     analysis_type: str
     force_refresh: bool = False
+    report_language: Literal["en", "zh-CN"] = "en"
 
 class EvidenceSyncResponse(BaseModel):
     snapshot_id: int

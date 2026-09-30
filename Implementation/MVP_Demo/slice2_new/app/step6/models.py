@@ -29,6 +29,7 @@ class ResearchReport(Base):
     what_changed = Column(Text)
     evidence_delta = Column(JSON)
     valuation_implications = Column(JSON)
+    language = Column(String(10), default="en")
     __table_args__ = (Index("ix_report_company_date", "company_id", "created_at", "id"),)
 
 class ResearchThread(Base):

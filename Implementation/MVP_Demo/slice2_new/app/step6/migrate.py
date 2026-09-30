@@ -1,6 +1,5 @@
 """Run from slice2_new: python -m app.step6.migrate. Stop Uvicorn first."""
 import sqlite3
-from sqlalchemy import inspect, text
 from datetime import datetime, timezone
 from pathlib import Path
 from dotenv import load_dotenv
@@ -29,12 +28,6 @@ def main():
         step6_models.ThreadAction.__table__,
         step6_models.PersonalResearchNote.__table__,
     ])
-    if engine.url.get_backend_name()=="sqlite":
-        cols={c["name"] for c in inspect(engine).get_columns("research_reports")}
-        if "valuation_implications" not in cols:
-            with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE research_reports ADD COLUMN valuation_implications JSON"))
-            print("Added nullable research_reports.valuation_implications")
     with SessionLocal() as session:
         imported=import_successful_drafts(session)
     print("Successfully imported Master Research Reports:", imported)
