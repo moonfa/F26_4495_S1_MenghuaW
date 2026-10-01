@@ -203,7 +203,6 @@ def build_router(provider: str) -> APIRouter:
                     ResearchReport.provider == ("gemini" if os.getenv("AI_PROVIDER", "mock").strip().lower() in ("google", "gemini") else os.getenv("AI_PROVIDER", "mock").strip().lower()),
                     ResearchReport.model == ("mock-model" if os.getenv("AI_PROVIDER", "mock").strip().lower() == "mock" else os.getenv("AI_MODEL", "gemini-3.8-flash")),
                     ResearchReport.status == "success",
-                    ResearchReport.language == getattr(payload, "report_language", "en"),
                 ).order_by(ResearchReport.created_at.desc(), ResearchReport.id.desc())
             )
             if old_report:

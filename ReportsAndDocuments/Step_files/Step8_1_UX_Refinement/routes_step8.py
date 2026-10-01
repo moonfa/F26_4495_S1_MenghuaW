@@ -40,45 +40,18 @@ def evidence_delta(current,previous):
     new_news=[x for x in (current.get('recent_news') or []) if str(x.get('title','')).strip() not in old_titles]
     return {'status':'changed' if changes or new_news else 'unchanged','metric_changes':changes[:40],'new_news_count':len(new_news),'new_news_titles':[x.get('title') for x in new_news[:8]]}
 def classify(delta):
-    changes=delta.get('metric_changes') or []; news=delta.get('new_news_titles') or []
-    thesis=[x for x in changes if not x['metric'].startswith('market.')]
-    maxmove=max([abs(x.get('pct_change',0)) for x in thesis] or [0])
-    text=' '.join(str(x).lower() for x in news)
-    hard=('raises guidance','cuts guidance','withdraws guidance','earnings miss','earnings beat','acquisition','merger','bankruptcy','ceo resign','ceo steps down','chief executive resign','restatement','sec investigation','antitrust lawsuit')
-    material=maxmove>=0.20 or any(w in text for w in hard)
-    research=material or maxmove>=0.05 or len(news)>=2 or any(x['metric'].startswith(('financial_health.','analyst_consensus.')) for x in thesis)
-    return ('material' if material else 'research' if research else 'evidence')
-
-def guardrail(level, result):
-    if level != "material":
-        return level, False
-
-    impacts = result.get("driver_impacts") or []
-    valuations = result.get("valuation_implications") or []
-
-    low_impacts = (
-        bool(impacts)
-        and all(x.get("magnitude") == "low" for x in impacts)
-    )
-
-    unchanged_valuation = (
-        bool(valuations)
-        and all(
-            x.get("direction") in ("unchanged", "uncertain")
-            and x.get("magnitude") == "low"
-            for x in valuations
-        )
-    )
-
-    # AI analysis says the apparent "material" signal is actually low impact.
-    # Downgrade it instead of recommending an unnecessary Full Review.
-    if low_impacts and unchanged_valuation:
-        return "research", False
-
-    return "material", bool(
-        result.get("full_review_recommended", True)
-    )
-
+    changes=delta.get('metric_changes') or [];news=delta.get('new_news_titles') or []
+    maxmove=max([abs(x.get('pct_change',0)) for x in changes] or [0]);text=' '.join(str(x).lower() for x in news)
+    hard=('earnings','guidance','acquisition','merger','bankruptcy','ceo resign','ceo steps down','chief executive resign','restatement','sec investigation','antitrust lawsuit')
+    material=maxmove>=.20 or any(w in text for w in hard)
+    research=material or maxmove>=.05 or len(news)>=2 or any(x['metric'].startswith(('financial_health.','analyst_consensus.')) for x in changes)
+    return 'material' if material else 'research' if research else 'evidence'
+def guardrail(level,result):
+    if level!='material':return level,False
+    impacts=result.get('driver_impacts') or [];vals=result.get('valuation_implications') or []
+    low=bool(impacts) and all(x.get('magnitude')=='low' for x in impacts)
+    unchanged=bool(vals) and all(x.get('direction') in ('unchanged','uncertain') and x.get('magnitude')=='low' for x in vals)
+    return ('research',False) if low and unchanged else ('material',bool(result.get('full_review_recommended',True)))
 class CompanyStateRequest(BaseModel):
     status:Literal['watching','following','archived']|None=None
     report_language:Literal['en','zh-CN']|None=None
@@ -135,7 +108,7 @@ def updates(ticker:str,limit:int=50,session:Session=Depends(get_session)):
 @router.get('/companies/{ticker}/research-timeline')
 def research_timeline(ticker:str,limit:int=100,session:Session=Depends(get_session)):
     c=company_for(session,ticker);events=[]
-    for r in session.scalars(select(ResearchReport).where(ResearchReport.company_id==c.id,ResearchReport.status=='success')).all():events.append({'type':'full_review','id':r.id,'created_at':r.created_at,'title':'Full Research Review','summary':'Saved Master Research Report','language':getattr(r,'language',None) or 'en','snapshot_id':r.snapshot_id})
+    for r in session.scalars(select(ResearchReport).where(ResearchReport.company_id==c.id,ResearchReport.status=='success')).all():events.append({'type':'full_review','id':r.id,'created_at':r.created_at,'title':'Full Research Review','summary':r.what_changed or ((r.key_takeaways or [''])[0]),'language':getattr(r,'language',None) or 'en','snapshot_id':r.snapshot_id})
     for u in session.scalars(select(ResearchUpdate).where(ResearchUpdate.company_id==c.id)).all():events.append({'type':'research_update' if u.update_level!='evidence' else 'evidence_update','id':u.id,'created_at':u.created_at,'title':u.update_level.replace('_',' ').title(),'summary':u.summary,'update_level':u.update_level,'snapshot_id':u.snapshot_id,'previous_snapshot_id':u.previous_snapshot_id,'evidence_delta':u.evidence_delta,'full_review_recommended':u.full_review_recommended,'language':u.language})
     for n in session.scalars(select(PersonalResearchNote).where(PersonalResearchNote.company_id==c.id)).all():events.append({'type':'personal_note','id':n.id,'created_at':n.created_at,'title':n.note_type.replace('_',' ').title(),'summary':n.body[:240]})
-    events.sort(key=lambda x:((x['created_at'].isoformat() if hasattr(x.get('created_at'),'isoformat') else str(x.get('created_at') or '')),x['id']),reverse=True);return events[:max(1,min(limit,200))]
+    events.sort(key=lambda x:(x['created_at'] or datetime.min.replace(tzinfo=timezone.utc),x['id']),reverse=True);return events[:max(1,min(limit,200))]
